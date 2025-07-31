@@ -11,7 +11,6 @@ steps:
           --trigger-topic=custom_event_trigger_test \
           --entry-point=main \
           --source=. \
-          --env-vars-file=.env.yaml \
           --timeout=540s \
           --memory=512MB \
           --service-account=custom-event-params-automation@ga4-dataform.iam.gserviceaccount.com \
