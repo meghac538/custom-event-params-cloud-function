@@ -16,3 +16,6 @@ steps:
           --memory=512MB \
           --service-account=custom-event-params-automation@ga4-dataform.iam.gserviceaccount.com \
           --set-secrets=github-token=projects/ga4-dataform/secrets/github-token:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
