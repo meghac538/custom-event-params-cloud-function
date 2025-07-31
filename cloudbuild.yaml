@@ -1,0 +1,18 @@
+steps:
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud functions deploy app \
+          --project=ga4-dataform \
+          --region=us-west1 \
+          --runtime=python310 \
+          --trigger-topic=custom_event_trigger_test \
+          --entry-point=main \
+          --source=. \
+          --env-vars-file=.env.yaml \
+          --timeout=540s \
+          --memory=512MB \
+          --service-account=custom-event-params-automation@ga4-dataform.iam.gserviceaccount.com \
+          --set-secrets=github-token=projects/ga4-dataform/secrets/github-token:latest
