@@ -4,7 +4,7 @@ steps:
     args:
       - '-c'
       - |
-        gcloud functions deploy app \
+        gcloud functions deploy custom-event-params-automation \
           --project=ga4-dataform \
           --region=us-west1 \
           --runtime=python310 \
