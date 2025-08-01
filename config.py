@@ -31,7 +31,7 @@ DAYS_TO_LOOK_BACK    = 7
 # -------------------------------
 # GitHub Configuration
 # -------------------------------
-REPO                 = "meghac538/OneOrigin-GA4-Dataform"
+REPO                 = "Reshma-San/OneOrigin-GA4-Dataform"
 FILE_PATH            = "includes/custom/config.js"
 BRANCH               = "main"
 COMMIT_MESSAGE       = "Update CUSTOM_EVENT_PARAMS_ARRAY in config.js"
