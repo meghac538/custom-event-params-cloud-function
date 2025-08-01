@@ -9,7 +9,7 @@ steps:
           --region=us-west1 \
           --runtime=python310 \
           --trigger-topic=custom_event_trigger_test \
-          --entry-point=main \
+          --entry-point=app \
           --source=. \
           --timeout=540s \
           --memory=512MB \
