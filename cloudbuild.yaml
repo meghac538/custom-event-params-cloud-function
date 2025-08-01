@@ -13,6 +13,7 @@ steps:
           --source=. \
           --timeout=540s \
           --memory=512MB \
+          --gen2 \
           --service-account=custom-event-params-automation@ga4-dataform.iam.gserviceaccount.com \
           --set-secrets=github-token=projects/ga4-dataform/secrets/github-token:latest
 
