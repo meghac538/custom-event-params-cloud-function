@@ -63,6 +63,12 @@ def app(request: Request):
         config_update_result = update_config_file_with_new_params()
         print(f"Config update result:\n{config_update_result}")
 
+
+        # -----------------------
+        # Step 4: Print pushed from git
+        # -----------------------
+        print("Build test: This log is pushed from git!")
+
         return jsonify({
             "compare_result": compare_result,
             "alter_result": alter_result,
