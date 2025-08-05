@@ -8,7 +8,7 @@ steps:
           --project=ga4-dataform \
           --region=us-west1 \
           --runtime=python310 \
-          --trigger-topic=custom_event_trigger_test \
+          --trigger-http \
           --entry-point=app \
           --source=. \
           --timeout=540s \
