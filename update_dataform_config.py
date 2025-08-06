@@ -23,7 +23,7 @@ from config import (
 def get_github_token():
     print("[INFO] Accessing GitHub token from Secret Manager...")
     client = secretmanager.SecretManagerServiceClient()
-    secret_name = f"projects/{PROJECT_ID}/secrets/github-token/versions/latest"
+    secret_name = f"projects/{PROJECT_ID}/secrets/dataform-github-access-token/versions/latest"
     try:
         response = client.access_secret_version(request={"name": secret_name})
         token = response.payload.data.decode("utf-8").strip()
@@ -92,13 +92,28 @@ def update_config_file_with_new_params():
     new_params = fetch_missing_event_params()
     added_params = []
 
+    # Type mapping from BigQuery to Dataform
+    DATAFORM_TYPE_MAPPING = {
+        "STRING": "string",
+        "INT64": "int", 
+        "INTEGER": "int",
+        "FLOAT64": "decimal",
+        "FLOAT": "decimal",
+        "BOOL": "string",
+        "BOOLEAN": "string"
+    }
+    
     for param in new_params:
         p_name, p_type = param["name"], param["type"]
         if not p_name or not p_type or p_type.strip().upper() == "UNKNOWN":
             continue
         if p_name in param_map:
             continue
-        param_map[p_name] = {"name": p_name, "type": p_type, "renameTo": p_name}
+        
+        # Convert BigQuery type to Dataform type
+        dataform_type = DATAFORM_TYPE_MAPPING.get(p_type.upper(), "string")
+        
+        param_map[p_name] = {"name": p_name, "type": dataform_type, "renameTo": p_name}
         added_params.append(param_map[p_name])
 
     if not added_params:
