@@ -1,7 +1,6 @@
 import requests
 import base64
 import re
-import datetime
 from google.cloud import secretmanager, bigquery
 from google.auth import default
 from google.auth.transport.requests import Request as AuthRequest
@@ -31,7 +30,7 @@ def get_github_token():
         print("[SUCCESS] GitHub token retrieved.")
         return token
     except Exception as e:
-        raise Exception(f"[ERROR] Failed to access GitHub token: {e}")
+        raise Exception(f"[ERROR] Failed to access GitHub token from Secret Manager: {e}")
 
 def fetch_missing_event_params():
     print("[INFO] Fetching missing event parameters from BigQuery...")
@@ -47,75 +46,11 @@ def fetch_missing_event_params():
         print(f"[SUCCESS] Retrieved {len(params)} missing params.")
         return params
     except NotFound:
-        raise Exception(f"[ERROR] Temp table `{TEMP_TABLE}` not found.")
+        raise Exception(f"[ERROR] Temp table `{TEMP_TABLE}` not found in dataset `{TEMP_DATASET}`.")
     except GoogleAPICallError as api_err:
         raise Exception(f"[ERROR] BigQuery API error: {api_err}")
     except Exception as e:
-        raise Exception(f"[ERROR] Failed fetching params: {e}")
-
-def create_latest_release():
-    print("[INFO] Creating latest Dataform release from branch 'main'...")
-    creds, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-    creds.refresh(AuthRequest())
-    token = creds.token
-
-    base_url = f"https://dataform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/{REGION}/repositories/{REPO_ID}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-
-    release_create_url = f"{base_url}/releases?releaseId={RELEASE_ID}"
-    payload = { "gitCommitish": "main" }
-
-    response = requests.post(release_create_url, headers=headers, json=payload)
-    print(f"[DEBUG] Release create status: {response.status_code}")
-    if response.status_code != 200:
-        raise Exception(f"[ERROR] Failed to create release: {response.status_code} - {response.text}")
-    print("[SUCCESS] Release created from latest main branch.")
-
-def sync_and_execute_dataform():
-    print("[DEBUG] Starting sync_and_execute_dataform()...")
-    try:
-        creds, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        creds.refresh(AuthRequest())
-        token = creds.token
-
-        base_url = f"https://dataform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/{REGION}/repositories/{REPO_ID}"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-
-        # Sync release config
-        print("[INFO] Syncing Dataform release config...")
-        release_url = f"{base_url}/releaseConfigs/{RELEASE_ID}:release"
-        release_resp = requests.post(release_url, headers=headers, json={})
-        if release_resp.status_code != 200:
-            print(f"[WARNING] Release sync failed: {release_resp.status_code} - {release_resp.text}")
-
-        # Invoke workflow
-        print("[INFO] Invoking Dataform workflow...")
-        workflow_payload = {
-            "workflowConfig": f"projects/{PROJECT_ID}/locations/{REGION}/repositories/{REPO_ID}/workflowConfigs/{WORKFLOW_ID}"
-        }
-        workflow_url = f"{base_url}/workflowInvocations"
-        workflow_resp = requests.post(workflow_url, headers=headers, json=workflow_payload)
-
-        print(f"[DEBUG] Workflow status: {workflow_resp.status_code}")
-        print(f"[DEBUG] Workflow response: {workflow_resp.text}")
-
-        if workflow_resp.status_code != 200:
-            raise Exception(f"[ERROR] Workflow invocation failed: {workflow_resp.status_code} - {workflow_resp.text}")
-
-        return {
-            "release_sync_status": release_resp.status_code,
-            "workflow_invocation_status": workflow_resp.status_code,
-            "workflow_invocation_response": workflow_resp.json()
-        }
-    except Exception as e:
-        print(f"[EXCEPTION] {str(e)}")
-        raise
+        raise Exception(f"[ERROR] General exception while fetching missing params: {e}")
 
 def update_config_file_with_new_params():
     token = get_github_token()
@@ -157,25 +92,28 @@ def update_config_file_with_new_params():
     new_params = fetch_missing_event_params()
     added_params = []
 
-    # Type mapping
+    # Type mapping from BigQuery to Dataform
     DATAFORM_TYPE_MAPPING = {
         "STRING": "string",
-        "INT64": "int",
+        "INT64": "int", 
         "INTEGER": "int",
         "FLOAT64": "decimal",
         "FLOAT": "decimal",
         "BOOL": "string",
         "BOOLEAN": "string"
     }
-
+    
     for param in new_params:
         p_name, p_type = param["name"], param["type"]
         if not p_name or not p_type or p_type.strip().upper() == "UNKNOWN":
             continue
         if p_name in param_map:
             continue
-
+        
+        # Convert BigQuery type to Dataform type
         dataform_type = DATAFORM_TYPE_MAPPING.get(p_type.upper(), "string")
+        
+        # Use parameter name as-is for extraction, no _event_param suffix in renameTo
         param_map[p_name] = {"name": p_name, "type": dataform_type, "renameTo": p_name}
         added_params.append(param_map[p_name])
 
@@ -209,6 +147,7 @@ def update_config_file_with_new_params():
             "status": "NO_CHANGE",
             "message": "Config unchanged. Format remained the same.",
             "new_params_added_count": 0,
+            "new_params_added": [],
             "total_unique_params_in_config": len(sorted_params)
         }
 
@@ -228,19 +167,64 @@ def update_config_file_with_new_params():
         raise Exception(f"[ERROR] GitHub PUT request failed: {e}")
 
     try:
-        print("[INFO] Creating new release...")
-        create_latest_release()
-
-        print("[INFO] Syncing and invoking workflow...")
+        print("[INFO] Syncing and invoking Dataform workflow...")
         sync_result = sync_and_execute_dataform()
+        print("[SUCCESS] Dataform sync and workflow execution complete.")
     except Exception as sync_error:
-        raise Exception(f"[ERROR] Config updated but Dataform sync/workflow failed: {sync_error}")
+        raise Exception(f"[ERROR] Config updated but Dataform sync failed: {sync_error}")
 
     return {
         "status": "SUCCESS",
-        "message": "Config updated and workflow triggered.",
+        "message": "Config updated successfully and Dataform workflow triggered.",
         "new_params_added_count": len(added_params),
         "new_params_added": [p["name"] for p in added_params],
         "total_unique_params_in_config": len(sorted_params),
         "dataform_sync": sync_result
     }
+
+def sync_and_execute_dataform():
+    print("[DEBUG] Starting sync_and_execute_dataform()")
+
+    try:
+        creds, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds.refresh(AuthRequest())
+        token = creds.token
+
+        base_url = f"https://dataform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/{REGION}/repositories/{REPO_ID}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+
+        # First: Sync repository to pull latest config changes
+        print("[INFO] Syncing Dataform repository...")
+        release_url = f"{base_url}/releaseConfigs/{RELEASE_ID}:release"
+        release_resp = requests.post(release_url, headers=headers, json={})
+        print(f"[DEBUG] Release sync status: {release_resp.status_code}")
+        
+        if release_resp.status_code != 200:
+            print(f"[WARNING] Release sync failed: {release_resp.status_code} - {release_resp.text}")
+        
+        # Second: Invoke workflow with fresh config
+        print("[INFO] Invoking Dataform workflow using workflowInvocations API...")
+        workflow_payload = {
+            "workflowConfig": f"projects/{PROJECT_ID}/locations/{REGION}/repositories/{REPO_ID}/workflowConfigs/{WORKFLOW_ID}"
+        }
+
+        workflow_url = f"{base_url}/workflowInvocations"
+        workflow_resp = requests.post(workflow_url, headers=headers, json=workflow_payload)
+        print(f"[DEBUG] Workflow invocation status: {workflow_resp.status_code}")
+        print(f"[DEBUG] Response: {workflow_resp.text}")
+
+        if workflow_resp.status_code != 200:
+            raise Exception(f"[ERROR] Workflow invocation failed: {workflow_resp.status_code} - {workflow_resp.text}")
+
+        return {
+            "release_sync_status": release_resp.status_code,
+            "workflow_invocation_status": workflow_resp.status_code,
+            "workflow_invocation_response": workflow_resp.json()
+        }
+
+    except Exception as e:
+        print(f"[EXCEPTION] {str(e)}")
+        raise
