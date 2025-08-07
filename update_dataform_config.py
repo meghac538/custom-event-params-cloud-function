@@ -196,16 +196,12 @@ def sync_and_execute_dataform():
             "Content-Type": "application/json"
         }
 
-        # First: Sync repository to pull latest config changes
-        print("[INFO] Syncing Dataform repository...")
-        release_url = f"{base_url}/releaseConfigs/{RELEASE_ID}:release"
-        release_resp = requests.post(release_url, headers=headers, json={})
-        print(f"[DEBUG] Release sync status: {release_resp.status_code}")
+        # Wait for GitHub changes to propagate
+        import time
+        print("[INFO] Waiting 5 seconds for GitHub changes to propagate...")
+        time.sleep(5)
         
-        if release_resp.status_code != 200:
-            print(f"[WARNING] Release sync failed: {release_resp.status_code} - {release_resp.text}")
-        
-        # Second: Invoke workflow with fresh config
+        # Invoke workflow with fresh config
         print("[INFO] Invoking Dataform workflow using workflowInvocations API...")
         workflow_payload = {
             "workflowConfig": f"projects/{PROJECT_ID}/locations/{REGION}/repositories/{REPO_ID}/workflowConfigs/{WORKFLOW_ID}"
@@ -220,7 +216,6 @@ def sync_and_execute_dataform():
             raise Exception(f"[ERROR] Workflow invocation failed: {workflow_resp.status_code} - {workflow_resp.text}")
 
         return {
-            "release_sync_status": release_resp.status_code,
             "workflow_invocation_status": workflow_resp.status_code,
             "workflow_invocation_response": workflow_resp.json()
         }
