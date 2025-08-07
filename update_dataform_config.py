@@ -16,8 +16,10 @@ from config import (
     COMMIT_MESSAGE,
     REGION,
     REPO_ID,
-    RELEASE_ID,
-    WORKFLOW_ID
+    RAW_DATASET,
+    ASSERTION_SCHEMA,
+    LOCAL_TIMEZONE,
+    TARGET_TABLE_NAME
 )
 
 def get_github_token():
@@ -184,6 +186,7 @@ def update_config_file_with_new_params():
 
 def sync_and_execute_dataform():
     print("[DEBUG] Starting sync_and_execute_dataform()")
+    import time
 
     try:
         creds, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
@@ -196,28 +199,64 @@ def sync_and_execute_dataform():
             "Content-Type": "application/json"
         }
 
-        # Wait for GitHub changes to propagate
-        import time
-        print("[INFO] Waiting 5 seconds for GitHub changes to propagate...")
-        time.sleep(5)
+        # Step 1: Create new release config with latest main branch
+        print("[INFO] Creating new release config with latest code...")
+        release_config_id = f"release_{int(time.time())}"
         
-        # Invoke workflow with fresh config
-        print("[INFO] Invoking Dataform workflow using workflowInvocations API...")
-        workflow_payload = {
-            "workflowConfig": f"projects/{PROJECT_ID}/locations/{REGION}/repositories/{REPO_ID}/workflowConfigs/{WORKFLOW_ID}"
+        release_config_payload = {
+            "gitCommitish": "main",  # Always use latest main
+            "codeCompilationConfig": {
+                "defaultDatabase": PROJECT_ID,
+                "defaultSchema": TEMP_DATASET,
+                "defaultLocation": REGION,
+                "assertionSchema": ASSERTION_SCHEMA,
+                "vars": {
+                    "GA4_DATASET": RAW_DATASET,
+                    "OUTPUTS_DATASET": TEMP_DATASET,
+                    "LOCAL_TIMEZONE": LOCAL_TIMEZONE
+                }
+            }
         }
+        
+        release_config_url = f"{base_url}/releaseConfigs?releaseConfigId={release_config_id}"
+        release_config_resp = requests.post(release_config_url, headers=headers, json=release_config_payload)
+        
+        if release_config_resp.status_code == 200:
+            print(f"[SUCCESS] Release config created: {release_config_id}")
+        else:
+            raise Exception(f"Failed to create release config: {release_config_resp.status_code} - {release_config_resp.text}")
 
+        # Step 2: Trigger workflow using the new release config
+        print("[INFO] Starting workflow with new release config...")
+        workflow_payload = {
+            "invocationConfig": {
+                "releaseConfig": f"{base_url}/releaseConfigs/{release_config_id}",
+                "includedTargets": [
+                    {
+                        "database": PROJECT_ID,
+                        "schema": TEMP_DATASET,
+                        "name": TARGET_TABLE_NAME
+                    }
+                ]
+            }
+        }
+        
         workflow_url = f"{base_url}/workflowInvocations"
         workflow_resp = requests.post(workflow_url, headers=headers, json=workflow_payload)
-        print(f"[DEBUG] Workflow invocation status: {workflow_resp.status_code}")
-        print(f"[DEBUG] Response: {workflow_resp.text}")
-
-        if workflow_resp.status_code != 200:
-            raise Exception(f"[ERROR] Workflow invocation failed: {workflow_resp.status_code} - {workflow_resp.text}")
+        
+        if workflow_resp.status_code == 200:
+            result = workflow_resp.json()
+            invocation_id = result["name"].split("/")[-1]
+            print(f"[SUCCESS] Workflow started: {invocation_id}")
+            print(f"[INFO] Monitor at: https://console.cloud.google.com/bigquery/dataform/locations/{REGION}/repositories/{REPO_ID}/workflowInvocations/{invocation_id}")
+        else:
+            raise Exception(f"Failed to start workflow: {workflow_resp.status_code} - {workflow_resp.text}")
 
         return {
             "workflow_invocation_status": workflow_resp.status_code,
-            "workflow_invocation_response": workflow_resp.json()
+            "workflow_invocation_response": workflow_resp.json(),
+            "release_config_used": release_config_id,
+            "invocation_id": invocation_id
         }
 
     except Exception as e:
