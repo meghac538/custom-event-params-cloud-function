@@ -15,12 +15,12 @@ RAW_TABLE_PATTERN    = "events_*"
 # -------------------------------
 # Processed Table (Dataform)
 # -------------------------------
-PROCESSED_TABLE_ID   = "ga4-dataform.TestAutomaticEventUpdate.ga4_events"
+PROCESSED_TABLE_ID   = "ga4-dataform.GA4Dataform_374935609.ga4_events"
 
 # -------------------------------
 # Temporary Output Table
 # -------------------------------
-TEMP_DATASET         = "TestAutomaticEventUpdate"
+TEMP_DATASET         = "GA4Dataform_374935609"
 TEMP_TABLE           = "missing_event_params_schema"
 
 # -------------------------------
