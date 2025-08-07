@@ -40,5 +40,5 @@ COMMIT_MESSAGE       = "Update CUSTOM_EVENT_PARAMS_ARRAY in config.js"
 # Dataform API Execution Constants
 # -------------------------------
 REPO_ID              = "OneOrigin-GA4-Dataform"      # Repository ID in Dataform
-RELEASE_ID           = "custom_event_params"             # Release config name
+RELEASE_ID           = "custom_event_params_test"             # Release config name
 WORKFLOW_ID          = "automation_test"                 # Workflow config name
