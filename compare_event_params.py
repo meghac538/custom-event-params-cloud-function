@@ -80,13 +80,52 @@ def compare_event_params_and_store_schema_diff(request):
     print(f"Found {len(processed_fields)} processed parameter fields.")
 
     # -------------------------------
-    # Identify Missing Keys
+    # Core parameters that should not be added to custom array
+    # -------------------------------
+    core_params = {
+        # Batch parameters
+        'batch_ordering_id', 'batch_page_id',
+        # Page parameters  
+        'page_location', 'page_referrer', 'page_title',
+        # Session parameters
+        'ga_session_id', 'ga_session_number', 'engagement_time_msec', 'session_engaged',
+        'engaged_session_event', 'entrances', 'ignore_referrer', 'synthetic_bundle',
+        # Content parameters
+        'content_group', 'content_id', 'content_type', 'content',
+        # Traffic source parameters
+        'medium', 'campaign', 'source', 'term', 'campaign_info_source',
+        # Click IDs
+        'gclid', 'dclid', 'srsltid', 'aclid', 'cp1', 'anid', 'click_timestamp',
+        # Ecommerce parameters
+        'currency', 'shipping', 'tax', 'value', 'transaction_id', 'coupon', 
+        'payment_type', 'shipping_tier', 'item_list_id', 'item_list_name',
+        'creative_name', 'creative_slot', 'promotion_id', 'promotion_name', 'item_name',
+        # Link tracking
+        'link_classes', 'link_domain', 'link_id', 'link_text', 'link_url', 'outbound',
+        # Video tracking
+        'video_current_time', 'video_duration', 'video_percent', 'video_provider',
+        'video_title', 'video_url',
+        # App parameters
+        'app_version', 'method', 'fatal', 'timestamp',
+        # Other core parameters
+        'reward_type', 'reward_value', 'label', 'language', 'percent_scrolled',
+        'search_term', 'file_extension', 'file_name', 'screen_resolution'
+    }
+    
+    # -------------------------------
+    # Identify Missing Keys (excluding core parameters)
     # -------------------------------
     missing_keys = [
         (key, raw_key_type_map[key])
         for key in raw_key_type_map
-        if key not in processed_fields
+        if key not in processed_fields and key not in core_params
     ]
+    
+    # Log skipped core parameters
+    skipped_core = [key for key in raw_key_type_map if key in core_params]
+    if skipped_core:
+        print(f"Skipped {len(skipped_core)} core parameters: {skipped_core}")
+    
     print(f"Identified {len(missing_keys)} missing keys to be added.")
 
     rows_to_insert = [
@@ -135,5 +174,6 @@ def compare_event_params_and_store_schema_diff(request):
     return {
         "written_table": table_id,
         "missing_count": len(missing_keys),
-        "fields": rows_to_insert
+        "fields": rows_to_insert,
+        "skipped_core_params": len([key for key in raw_key_type_map if key in core_params])
     }
